@@ -1,0 +1,615 @@
+<!--
+  prototype shell: the review chrome every prototype starts from.
+
+  Keep this comment in the prototype you grow from here: it is the contract,
+  and later turns work from that file rather than from this one.
+
+  Contract (extend product screens; keep the review shell):
+  - Product:  .sh-stage contains only end-user product UI. Keep review notes,
+               rationale, instructions, and approval controls in conversation.
+  - Screens:  <section data-screen="slug" data-title="Label"> inside .sh-stage.
+               The selector, arrow keys, and #hash routing build themselves.
+               Use one option per product destination or distinct surface,
+               named by its product role. Keep baselines, variants, comparison
+               labels, steps, indexes, and progress out of names and states.
+               Links may use href="#slug".
+  - States:   "Default" is automatic. A screen declares only representative
+               presets in data-states="Empty,Error". Use natural, screen-specific
+               names. Reserve presets for important multi-step results, forced
+               data or errors, or materially different structure; keep one-click
+               and transient states as interactions. Use data-when="Empty" on
+               preset-only elements. Call prototypeShell.setState("Name") on
+               entry and setState("Default") on exit, including when repeated
+               actions cross a preset condition.
+  - Viewport: "vp (m)" cycles full / 390 / 768. The 390 preset is a
+               fixed-height, internally scrolling phone frame. Start a
+               mobile-first prototype by adding class="sh-vp-390" to <body>
+               (or a bootstrap classList.add before the chrome script runs).
+  - Pinning:  keep in-frame bars (tab bars, CTAs) inside the phone with
+               position: sticky; position: fixed pins to the browser window.
+  - Tokens:   replace the project-tokens block with project tokens copied
+               verbatim. Map differing names to --background, --foreground, and
+               --font afterwards; replace network fonts with a system stack and
+               note that substitution. Without a design system, keep this
+               palette as the finished style. When the project ships dark
+               tokens, copy them under .sh-theme-dark, which the shell sets
+               on both the root element and body, so :root.sh-theme-dark and
+               body.sh-theme-dark work too. A .dark class or a
+               prefers-color-scheme media query copied verbatim would follow
+               the reviewer's system instead of the toggle.
+  - Theme:    the light / dark switch (t) changes the product surface only.
+               It appears only when a .sh-theme-dark rule declares dark tokens,
+               so a prototype without them carries no theme control. Prototypes
+               always load light; the review bar keeps its own dark styling in
+               both themes so it still reads as chrome.
+  - Placeholders: .wf-pic stands in for pictures the prototype has no real
+               files for. Use real text everywhere text belongs.
+
+  - Chrome:   Keep exactly the screen selector, selected-screen state selector,
+               viewport cycle, and theme toggle.
+
+  Self-contained by design: no build, no framework, no network.
+-->
+<meta charset="utf-8">
+<title>Prototype</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  /* ── project tokens: copied from app/globals.css (shadcn neutral) ──
+     Font substitution: the project's Geist is replaced with a system stack. */
+  :root {
+    --background: oklch(1 0 0);
+    --foreground: oklch(0.145 0 0);
+    --card: oklch(1 0 0);
+    --card-foreground: oklch(0.145 0 0);
+    --popover: oklch(1 0 0);
+    --popover-foreground: oklch(0.145 0 0);
+    --primary: oklch(0.205 0 0);
+    --primary-foreground: oklch(0.985 0 0);
+    --secondary: oklch(0.97 0 0);
+    --secondary-foreground: oklch(0.205 0 0);
+    --muted: oklch(0.97 0 0);
+    --muted-foreground: oklch(0.556 0 0);
+    --accent: oklch(0.97 0 0);
+    --accent-foreground: oklch(0.205 0 0);
+    --destructive: oklch(0.577 0.245 27.325);
+    --border: oklch(0.922 0 0);
+    --input: oklch(0.922 0 0);
+    --ring: oklch(0.708 0 0);
+    --radius: 0.625rem;
+    --font: ui-sans-serif, system-ui, "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", sans-serif;
+    --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  .sh-theme-dark {
+    --background: oklch(0.145 0 0);
+    --foreground: oklch(0.985 0 0);
+    --card: oklch(0.205 0 0);
+    --card-foreground: oklch(0.985 0 0);
+    --popover: oklch(0.205 0 0);
+    --popover-foreground: oklch(0.985 0 0);
+    --primary: oklch(0.922 0 0);
+    --primary-foreground: oklch(0.205 0 0);
+    --secondary: oklch(0.269 0 0);
+    --secondary-foreground: oklch(0.985 0 0);
+    --muted: oklch(0.269 0 0);
+    --muted-foreground: oklch(0.708 0 0);
+    --accent: oklch(0.269 0 0);
+    --accent-foreground: oklch(0.985 0 0);
+    --destructive: oklch(0.704 0.191 22.216);
+    --border: oklch(1 0 0 / 10%);
+    --input: oklch(1 0 0 / 15%);
+    --ring: oklch(0.556 0 0);
+  }
+
+  /* ── review chrome (sh-*): keep; extend product styles elsewhere ── */
+  * { box-sizing: border-box }
+  body {
+    margin: 0; padding: 0 0 40px;
+    background: var(--background, #f6f6f6); color: var(--foreground, #3a3a3a);
+    font-family: var(--font, system-ui, sans-serif);
+  }
+  .sh-bar {
+    position: sticky; top: 0; z-index: 999;
+    display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+    padding: 8px 12px; background: #191a1c; color: #d7d7d7;
+    font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  .sh-bar b, .sh-control-label { color: #8a8f98; font-weight: 500 }
+  .sh-control { display: inline-flex; gap: 5px; align-items: center }
+  .sh-bar button {
+    border: 1px solid #3a3d42; background: none; color: inherit;
+    font: inherit; padding: 2px 9px; border-radius: 99px; cursor: pointer;
+  }
+  .sh-bar select {
+    width: 170px; border: 1px solid #3a3d42; background: #232428; color: inherit;
+    font: inherit; padding: 3px 28px 3px 9px; border-radius: 7px; cursor: pointer;
+    color-scheme: dark;
+  }
+  #sh-screen { width: 190px }
+  .sh-bar button.on { background: #d7d7d7; color: #191a1c; border-color: #d7d7d7 }
+  .sh-theme { display: inline-flex; border: 1px solid #3a3d42; border-radius: 99px; overflow: hidden }
+  .sh-theme button { border: 0; border-radius: 0; padding: 2px 10px }
+  .sh-spacer { flex: 1 }
+  .sh-stage { max-width: 960px; margin: 0 auto; padding: 12px 16px 0 }
+  [hidden] { display: none !important }
+
+  /* viewport presets */
+  .sh-vp-390 .sh-stage {
+    max-width: 390px; background: var(--background, #f6f6f6);
+    border: 10px solid #191a1c; border-radius: 28px;
+    padding: 16px 12px; height: min(844px, calc(100dvh - 52px));
+    overflow-y: auto; margin-top: 12px;
+  }
+  .sh-vp-768 .sh-stage {
+    max-width: 768px; border: 1px solid #c4c4c4; border-radius: 12px;
+    padding: 16px; margin-top: 12px;
+  }
+
+  /* placeholders */
+  .wf-pic  { border-radius: 4px; background:
+             repeating-linear-gradient(45deg, #e9e9e9, #e9e9e9 6px, #f2f2f2 6px, #f2f2f2 12px) }
+  .sh-theme-dark .wf-pic { background: repeating-linear-gradient(45deg,
+             color-mix(in srgb, var(--foreground) 16%, transparent) 0 6px,
+             color-mix(in srgb, var(--foreground) 8%, transparent) 6px 12px) }
+
+  /* ── product styles ── */
+  .app { max-width: 720px; margin: 0 auto; padding: 24px 0 48px; display: flex; flex-direction: column; gap: 24px }
+  .app-head { display: flex; align-items: center; justify-content: space-between; gap: 12px }
+  .app-title { margin: 0; font-size: 1.125rem; font-weight: 600; letter-spacing: -0.01em }
+  .app-title span { color: var(--muted-foreground); font-weight: 400 }
+
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    height: 36px; padding: 0 12px; border-radius: calc(var(--radius) * 0.8);
+    border: 1px solid transparent; font: inherit; font-size: 0.875rem; font-weight: 500;
+    cursor: pointer; white-space: nowrap; color: var(--foreground); background: none;
+    transition: background .12s, opacity .12s;
+  }
+  .btn:focus-visible, .chip:focus-visible, .field:focus-visible, .link-btn:focus-visible {
+    outline: 3px solid color-mix(in oklch, var(--ring) 50%, transparent); outline-offset: 1px;
+  }
+  .btn:disabled { opacity: .5; cursor: not-allowed }
+  .btn svg { width: 16px; height: 16px; flex: none }
+  .btn-primary { background: var(--primary); color: var(--primary-foreground) }
+  .btn-primary:not(:disabled):hover { opacity: .85 }
+  .btn-outline { border-color: var(--border); background: var(--background) }
+  .sh-theme-dark .btn-outline { border-color: var(--input); background: color-mix(in oklch, var(--input) 30%, transparent) }
+  .btn-outline:not(:disabled):hover { background: var(--muted) }
+  .btn-ghost:not(:disabled):hover { background: var(--muted) }
+  .btn-icon { width: 36px; padding: 0 }
+
+  .field {
+    width: 100%; height: 40px; padding: 0 12px; font: inherit; font-size: 0.9375rem;
+    color: var(--foreground); background: transparent; border: 1px solid var(--input);
+    border-radius: calc(var(--radius) * 0.8);
+  }
+  textarea.field { height: auto; min-height: 72px; padding: 10px 12px; resize: vertical; line-height: 1.5 }
+  .field::placeholder { color: var(--muted-foreground) }
+
+  .card { background: var(--card); color: var(--card-foreground); border: 1px solid var(--border); border-radius: var(--radius); }
+  .input-row { display: flex; gap: 8px }
+  .field-wrap { position: relative; flex: 1; min-width: 0 }
+  .field-wrap .field { padding-right: 40px }
+  .clear-x {
+    position: absolute; top: 50%; right: 6px; transform: translateY(-50%);
+    width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center;
+    border: 0; border-radius: 99px; background: none; color: var(--muted-foreground); cursor: pointer;
+  }
+  .clear-x:hover { background: var(--muted); color: var(--foreground) }
+  .clear-x:focus-visible { outline: 3px solid color-mix(in oklch, var(--ring) 50%, transparent); outline-offset: 1px }
+  .clear-x svg { width: 16px; height: 16px }
+  .input-row .btn { height: 40px }
+
+  .hint { padding: 28px 20px; text-align: center; color: var(--muted-foreground); font-size: 0.9375rem; line-height: 1.6 }
+  .hint strong { display: block; color: var(--foreground); font-size: 1rem; margin-bottom: 4px }
+
+  .alert { display: flex; gap: 10px; padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius); font-size: 0.875rem; line-height: 1.55 }
+  .alert svg { width: 16px; height: 16px; flex: none; margin-top: 3px }
+  .alert-title { font-weight: 600; margin: 0 0 2px }
+  .alert p { margin: 0; color: var(--muted-foreground) }
+  .alert-destructive { border-color: color-mix(in oklch, var(--destructive) 40%, var(--border)); }
+  .alert-destructive svg, .alert-destructive .alert-title { color: var(--destructive) }
+  .alert-actions { margin-top: 8px }
+  .link-btn { background: none; border: 0; padding: 0; font: inherit; font-weight: 500; color: var(--foreground); text-decoration: underline; text-underline-offset: 3px; cursor: pointer }
+
+  .skel { background: var(--muted); border-radius: 6px; animation: pulse 1.4s ease-in-out infinite }
+  @keyframes pulse { 50% { opacity: .5 } }
+  .skel-wrap { padding: 20px; display: flex; flex-direction: column; gap: 10px }
+
+  .result { display: flex; flex-direction: column; gap: 20px }
+  .doc-head h2 { margin: 0 0 8px; font-size: 1.5rem; line-height: 1.3; letter-spacing: -0.02em; text-wrap: balance; word-break: keep-all }
+  .doc-meta { display: flex; flex-wrap: wrap; gap: 4px 10px; color: var(--muted-foreground); font-size: 0.875rem }
+  .doc-meta b { color: var(--foreground); font-weight: 500 }
+  .badge { display: inline-flex; align-items: center; height: 20px; padding: 0 8px; font-size: 0.75rem; font-weight: 500; border-radius: 99px; background: var(--secondary); color: var(--secondary-foreground) }
+
+  .toolbar { padding: 14px; display: flex; flex-direction: column; gap: 14px }
+  .toolbar-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center }
+  .toolbar-label { font-size: 0.8125rem; font-weight: 500; color: var(--muted-foreground); margin-right: 4px }
+  .divider { height: 1px; background: var(--border); border: 0; margin: 0 }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px }
+  .chip {
+    height: 32px; padding: 0 12px; border-radius: 99px; border: 1px solid var(--border);
+    background: var(--background); color: var(--foreground); font: inherit; font-size: 0.8125rem; cursor: pointer;
+  }
+  .chip:hover { background: var(--muted) }
+  .chip[aria-pressed="true"] { background: var(--primary); color: var(--primary-foreground); border-color: var(--primary) }
+  .payload { margin: 0; font-size: 0.8125rem; color: var(--muted-foreground); line-height: 1.5 }
+  .payload b { color: var(--foreground); font-weight: 500 }
+
+  .md { padding: 24px; font-size: 0.9375rem; line-height: 1.75; word-break: keep-all; overflow-wrap: anywhere }
+  .md > :first-child { margin-top: 0 } .md > :last-child { margin-bottom: 0 }
+  .md h2 { font-size: 1.25rem; margin: 1.8em 0 .6em; letter-spacing: -0.01em; line-height: 1.35 }
+  .md h3 { font-size: 1.0625rem; margin: 1.5em 0 .5em }
+  .md p, .md ul, .md ol, .md blockquote, .md pre { margin: 0 0 1em }
+  .md ul, .md ol { padding-left: 1.4em } .md li { margin: .25em 0 }
+  .md a { color: var(--foreground); text-underline-offset: 3px }
+  .md code { font-family: var(--font-mono); font-size: .875em; background: var(--muted); padding: 2px 6px; border-radius: 6px }
+  .md pre { background: var(--muted); border-radius: calc(var(--radius) * .8); padding: 14px 16px; overflow-x: auto; line-height: 1.55 }
+  .md pre code { background: none; padding: 0; font-size: .8125rem }
+  .md blockquote { border-left: 3px solid var(--border); padding-left: 14px; color: var(--muted-foreground) }
+  .md table { border-collapse: collapse; width: 100%; font-size: .875rem; margin: 0 0 1em }
+  .md th, .md td { border: 1px solid var(--border); padding: 6px 10px; text-align: left }
+  .md-fade { text-align: center; padding: 12px 0 0; color: var(--muted-foreground); font-size: .8125rem }
+
+  .toast {
+    position: sticky; bottom: 12px; align-self: center; z-index: 5;
+    padding: 10px 14px; border-radius: calc(var(--radius) * .8); font-size: .875rem;
+    background: var(--primary); color: var(--primary-foreground);
+    box-shadow: 0 6px 20px oklch(0 0 0 / 22%); max-width: 100%;
+  }
+
+  @media (max-width: 520px) {
+    .input-row { flex-wrap: wrap } .input-row .field-wrap { flex-basis: 100% }
+    .input-row .btn-primary { flex: 1 }
+    .doc-head h2 { font-size: 1.25rem } .md { padding: 18px }
+  }
+  .sh-vp-390 .input-row { flex-wrap: wrap } .sh-vp-390 .input-row .field-wrap { flex-basis: 100% }
+  .sh-vp-390 .input-row .btn-primary { flex: 1 }
+  .sh-vp-390 .doc-head h2 { font-size: 1.25rem } .sh-vp-390 .md { padding: 18px }
+</style>
+
+<header class="sh-bar">
+  <b>proto</b>
+  <label class="sh-control"><span class="sh-control-label">screen</span><select id="sh-screen"></select></label>
+  <span class="sh-spacer"></span>
+  <label class="sh-control"><span class="sh-control-label">state</span><select id="sh-state"></select></label>
+  <button id="sh-vp">vp: full (m)</button>
+  <div class="sh-theme" id="sh-theme" role="group" aria-label="theme (t)" hidden>
+    <button data-theme="light">light</button><button data-theme="dark">dark</button>
+  </div>
+</header>
+
+<main class="sh-stage">
+  <section data-screen="converter" data-title="변환기" data-states="Loading,Result,Long article,Invalid URL,Fetch failed,No content">
+    <div class="app">
+
+      <div class="app-head">
+        <h1 class="app-title">URL → Markdown <span>· LLM에 바로 넘기기</span></h1>
+        <button class="btn btn-outline btn-icon" id="theme-btn" data-component="Button" aria-label="다크모드" aria-pressed="false" title="다크모드">
+          <svg id="ic-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
+          <svg id="ic-sun" hidden viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
+        </button>
+      </div>
+
+      <form id="convert-form" class="input-row" data-component="Field" autocomplete="off">
+        <div class="field-wrap">
+          <input id="url" class="field" data-component="Input" type="text" inputmode="url" placeholder="https://… 변환할 페이지 주소를 붙여넣으세요" aria-label="페이지 주소">
+          <button type="button" id="clear-btn" class="clear-x" data-component="Button" aria-label="지우기" title="지우기" hidden>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+          </button>
+        </div>
+        <button type="submit" id="convert-btn" class="btn btn-primary" data-component="Button">변환하기</button>
+      </form>
+
+      <!-- Default: empty hint -->
+      <div class="card hint" data-when="Default" data-component="Empty">
+        <strong>주소를 붙여넣고 변환을 누르세요</strong>
+        광고와 메뉴를 걷어내고 본문만 Markdown으로 뽑아 드립니다.<br>
+        결과는 복사하거나 .md 파일로 저장하고, ChatGPT·Claude로 바로 넘길 수 있습니다.
+      </div>
+
+      <!-- Loading -->
+      <div class="card skel-wrap" data-when="Loading" data-component="Skeleton" aria-busy="true" aria-label="변환 중">
+        <div class="skel" style="height:26px;width:72%"></div>
+        <div class="skel" style="height:14px;width:34%"></div>
+        <div class="skel" style="height:14px;width:100%;margin-top:10px"></div>
+        <div class="skel" style="height:14px;width:94%"></div>
+        <div class="skel" style="height:14px;width:98%"></div>
+        <div class="skel" style="height:14px;width:61%"></div>
+      </div>
+
+      <!-- Errors -->
+      <div class="alert alert-destructive" role="alert" data-when="Invalid URL" data-component="Alert">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>
+        <div><p class="alert-title">주소 형식이 올바르지 않습니다</p><p><code>http://</code> 또는 <code>https://</code>로 시작하는 주소를 입력해 주세요.</p></div>
+      </div>
+      <div class="alert alert-destructive" role="alert" data-when="Fetch failed" data-component="Alert">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>
+        <div><p class="alert-title">페이지를 가져오지 못했습니다</p><p>서버가 404 응답을 돌려줬습니다. 주소를 확인한 뒤 다시 시도해 주세요.</p>
+          <div class="alert-actions"><button type="button" class="link-btn" data-retry>다시 시도</button></div></div>
+      </div>
+      <div class="alert alert-destructive" role="alert" data-when="No content" data-component="Alert">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>
+        <div><p class="alert-title">본문을 찾지 못했습니다</p><p>로그인이 필요하거나 스크립트로 화면을 그리는 페이지일 수 있습니다. 다른 주소로 시도해 보세요.</p>
+          <div class="alert-actions"><button type="button" class="link-btn" data-retry>다시 시도</button></div></div>
+      </div>
+
+      <!-- Result -->
+      <div class="result" data-when="Result,Long article">
+        <header class="doc-head">
+          <h2 id="doc-title">REST에서 tRPC로 옮기며 배운 것: 14개 서비스, 6주, 그리고 끝내 버리지 못한 엔드포인트 3개</h2>
+          <div class="doc-meta">
+            <span>저자 <b>김지현</b></span><span>·</span><span>Example Engineering</span><span>·</span><span>2025년 3월 18일</span><span>·</span>
+            <span class="badge" data-component="Badge" data-when="Result">본문 약 2,840자</span>
+            <span class="badge" data-component="Badge" data-when="Long article">본문 약 48,200자</span>
+          </div>
+        </header>
+
+        <div class="card toolbar" data-component="Card">
+          <div class="toolbar-row">
+            <button type="button" class="btn btn-outline" id="copy-btn" data-component="Button">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              복사하기</button>
+            <button type="button" class="btn btn-outline" id="dl-btn" data-component="Button">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+              .md 다운로드</button>
+          </div>
+          <hr class="divider">
+          <div class="toolbar-row">
+            <span class="toolbar-label">프롬프트 (선택)</span>
+            <div class="chips" role="group" aria-label="프롬프트 선택" data-component="Toggle">
+              <button type="button" class="chip" data-prompt="요약해줘" aria-pressed="false">요약해줘</button>
+              <button type="button" class="chip" data-prompt="한국어로 번역해줘" aria-pressed="false">한국어로 번역해줘</button>
+              <button type="button" class="chip" data-prompt="쉽게 설명해줘" aria-pressed="false">쉽게 설명해줘</button>
+              <button type="button" class="chip" data-prompt="__custom__" aria-pressed="false">직접 입력</button>
+            </div>
+          </div>
+          <textarea id="custom-prompt" class="field" data-component="Textarea" hidden placeholder="예: 핵심만 세 줄로 정리하고, 반론도 하나 덧붙여줘" aria-label="직접 입력한 프롬프트"></textarea>
+          <p class="payload" id="payload"></p>
+          <div class="toolbar-row">
+            <button type="button" class="btn btn-primary" data-open="ChatGPT" data-component="Button">ChatGPT로 열기
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7M7 7h10v10"/></svg></button>
+            <button type="button" class="btn btn-primary" data-open="Claude" data-component="Button">Claude로 열기
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7M7 7h10v10"/></svg></button>
+          </div>
+          <div class="alert" id="paste-notice" role="status" hidden data-component="Alert">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg>
+            <div><p class="alert-title" id="paste-title">전체 텍스트를 복사했습니다</p><p id="paste-body">새로 열린 대화창에 붙여넣어 주세요 (Ctrl+V / ⌘V).</p></div>
+          </div>
+        </div>
+
+        <article class="card md" data-component="new:MarkdownView">
+          <p>14개 서비스를 REST에서 tRPC로 옮기는 데 <strong>6주</strong>가 걸렸습니다. 처음 잡았던 일정은 3주였고, 두 배가 된 이유는 코드가 아니라 <em>계약</em>에 있었습니다.</p>
+          <h2>왜 옮겼나</h2>
+          <p>프런트엔드와 백엔드가 같은 타입을 두 번 선언하고 있었습니다. OpenAPI 스펙을 고치면 클라이언트 코드를 다시 생성해야 했고, 그 사이에 배포된 서비스는 조용히 어긋났습니다. 지난 분기 장애 11건 중 <strong>7건(63.6%)</strong>이 이 어긋남에서 나왔습니다.</p>
+          <blockquote>타입은 한 곳에서만 선언되어야 한다. 두 곳에 있으면 둘 중 하나는 거짓말을 한다.</blockquote>
+          <h2>이관 순서</h2>
+          <ol>
+            <li>읽기 전용 엔드포인트부터 옮깁니다. 롤백이 쉽고 트래픽이 큽니다.</li>
+            <li>쓰기 엔드포인트는 기능 플래그 뒤에서 <code>shadow</code> 모드로 2주간 비교합니다.</li>
+            <li>외부 파트너가 쓰는 공개 API는 마지막까지 REST로 남깁니다.</li>
+          </ol>
+          <pre><code>export const orderRouter = router({
+  byId: publicProcedure
+    .input(z.object({ id: z.string().uuid() }))
+    .query(({ input }) =&gt; db.order.findUnique({ where: { id: input.id } })),
+});</code></pre>
+          <h2>버리지 못한 엔드포인트 3개</h2>
+          <p>웹훅 수신 2개와 파일 업로드 1개는 끝내 REST로 남았습니다. 자세한 이유는 <a href="#">부록: 예외 목록</a>에 정리했습니다.</p>
+          <table>
+            <thead><tr><th>엔드포인트</th><th>이유</th><th>p95</th></tr></thead>
+            <tbody>
+              <tr><td><code>POST /hooks/payment</code></td><td>외부 서명 검증</td><td>182 ms</td></tr>
+              <tr><td><code>POST /hooks/shipping</code></td><td>외부 서명 검증</td><td>97 ms</td></tr>
+              <tr><td><code>PUT /files/:id</code></td><td>멀티파트 스트리밍</td><td>1,240 ms</td></tr>
+            </tbody>
+          </table>
+          <p class="md-fade" data-when="Long article">… 이어서 본문이 계속됩니다</p>
+        </article>
+      </div>
+
+      <div class="toast" id="toast" role="status" data-component="Toast" hidden></div>
+    </div>
+  </section>
+</main>
+
+<script>
+  const stage = document.querySelector('.sh-stage');
+  const screens = [...stage.querySelectorAll('[data-screen]')];
+  const screenSelect = document.getElementById('sh-screen');
+  const stateSelect = document.getElementById('sh-state');
+  const vpBtn = document.getElementById('sh-vp');
+  const themeCtl = document.getElementById('sh-theme');
+  const themeBtns = [...themeCtl.querySelectorAll('button')];
+  let current = null;
+  let currentStates = [];
+
+  screens.forEach(s => {
+    const option = document.createElement('option');
+    option.textContent = s.dataset.title || s.dataset.screen;
+    option.value = s.dataset.screen;
+    screenSelect.append(option);
+  });
+  screenSelect.onchange = () => show(screenSelect.value);
+
+  function show(slug) {
+    current = screens.find(s => s.dataset.screen === slug) || screens[0];
+    screens.forEach(s => s.hidden = s !== current);
+    screenSelect.value = current.dataset.screen;
+    history.replaceState(null, '', '#' + current.dataset.screen);
+    buildStates();
+  }
+
+  function buildStates() {
+    const declared = (current.dataset.states || '').split(',').map(x => x.trim()).filter(Boolean);
+    currentStates = ['Default', ...declared.filter(name => name !== 'Default')];
+    stateSelect.innerHTML = '';
+    currentStates.forEach(name => {
+      const option = document.createElement('option');
+      option.textContent = name;
+      option.value = name;
+      stateSelect.append(option);
+    });
+    applyState('Default');
+  }
+
+  function applyState(name) {
+    const active = currentStates.includes(name) ? name : 'Default';
+    current.querySelectorAll('[data-when]').forEach(el => {
+      el.hidden = !el.dataset.when.split(',').map(x => x.trim()).includes(active);
+    });
+    stateSelect.value = active;
+  }
+  stateSelect.onchange = () => applyState(stateSelect.value);
+
+  window.prototypeShell = {
+    showScreen: show,
+    setState: applyState,
+    getScreen: () => current?.dataset.screen,
+    getState: () => stateSelect.value
+  };
+
+  const VPS = ['full', '390', '768'];
+  let vp = VPS.find(v => document.body.classList.contains('sh-vp-' + v)) || 'full';
+  function applyVp() {
+    VPS.forEach(v => document.body.classList.toggle('sh-vp-' + v, v === vp && v !== 'full'));
+    vpBtn.textContent = 'vp: ' + vp + ' (m)';
+    vpBtn.classList.toggle('on', vp !== 'full');
+  }
+  vpBtn.onclick = () => { vp = VPS[(VPS.indexOf(vp) + 1) % VPS.length]; applyVp(); };
+  applyVp();
+
+  const hasDark = [...document.styleSheets].some(sheet => {
+    try {
+      return [...sheet.cssRules].some(rule => (rule.selectorText || '')
+        .split(',').some(part => /\.sh-theme-dark$/.test(part.trim())));
+    } catch { return false }
+  });
+  let dark = false;
+  function applyTheme() {
+    document.documentElement.classList.toggle('sh-theme-dark', dark);
+    document.body.classList.toggle('sh-theme-dark', dark);
+    themeBtns.forEach(b => b.classList.toggle('on', (b.dataset.theme === 'dark') === dark));
+  }
+  themeCtl.hidden = !hasDark;
+  themeBtns.forEach(b => b.onclick = () => { dark = b.dataset.theme === 'dark'; applyTheme(); });
+  applyTheme();
+
+  addEventListener('keydown', e => {
+    if (/INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) return;
+    const i = screens.indexOf(current);
+    if (e.key === 'ArrowRight') show(screens[(i + 1) % screens.length].dataset.screen);
+    if (e.key === 'ArrowLeft') show(screens[(i - 1 + screens.length) % screens.length].dataset.screen);
+    if (e.key === 'm') vpBtn.click();
+    if (e.key === 't' && !themeCtl.hidden) { dark = !dark; applyTheme(); }
+  });
+
+  addEventListener('hashchange', () => show(location.hash.slice(1)));
+  show(location.hash.slice(1));
+</script>
+
+<script>
+  /* ── product behavior (dummy): converter ── */
+  (() => {
+    const SAMPLE = 'https://engineering.example.com/posts/migrating-rest-to-trpc-in-2025';
+    const $ = (id) => document.getElementById(id);
+    const url = $('url'), form = $('convert-form'), convertBtn = $('convert-btn'), clearBtn = $('clear-btn');
+    const chips = [...document.querySelectorAll('.chip')];
+    const custom = $('custom-prompt'), payload = $('payload'), notice = $('paste-notice'), toast = $('toast');
+    const sel = document.getElementById('sh-state');
+    let toastTimer, loadTimer;
+
+    const state = () => window.prototypeShell.getState();
+    const isLong = () => state() === 'Long article';
+    const go = (name) => { window.prototypeShell.setState(name); sync(); };
+
+    function say(msg) {
+      toast.textContent = msg; toast.hidden = false;
+      clearTimeout(toastTimer); toastTimer = setTimeout(() => toast.hidden = true, 2600);
+    }
+    function activePrompt() {
+      const on = chips.find(c => c.getAttribute('aria-pressed') === 'true');
+      if (!on) return '';
+      return on.dataset.prompt === '__custom__' ? custom.value.trim() : on.dataset.prompt;
+    }
+    function renderPayload() {
+      const p = activePrompt();
+      const how = isLong()
+        ? '본문이 길어 URL에 담을 수 없습니다. 열기를 누르면 전체 텍스트를 복사하고 새 대화창만 엽니다.'
+        : '열기를 누르면 새 대화창에 미리 채워서 엽니다.';
+      payload.innerHTML = (p ? '앞에 붙는 문장: <b>' + p.replace(/</g, '&lt;') + '</b>' : '앞에 붙는 문장 없음, 본문만 전달합니다.') + '<br>' + how;
+    }
+    function sync() {
+      const s = state();
+      const busy = s === 'Loading';
+      convertBtn.disabled = busy; convertBtn.textContent = busy ? '변환 중…' : '변환하기';
+      clearBtn.hidden = !url.value;
+      notice.hidden = true; toast.hidden = true;
+      renderPayload();
+    }
+
+    /* selector → fill the input the way the real flow would have left it */
+    sel.addEventListener('change', () => {
+      const s = state();
+      if (s === 'Default') url.value = '';
+      else if (s === 'Invalid URL') url.value = 'engineering.example.com/posts/rest-to-trpc';
+      else if (s === 'Long article') url.value = SAMPLE + '-long';
+      else url.value = SAMPLE;
+      chips.forEach(c => c.setAttribute('aria-pressed', 'false')); custom.hidden = true; custom.value = '';
+      sync();
+    });
+
+    function convert() {
+      const v = url.value.trim();
+      if (!/^https?:\/\/[^\s.]+\.\S+/i.test(v)) return go('Invalid URL');
+      go('Loading');
+      clearTimeout(loadTimer);
+      loadTimer = setTimeout(() => go(/long/i.test(v) ? 'Long article' : 'Result'), 1000);
+    }
+    form.addEventListener('submit', (e) => { e.preventDefault(); convert(); });
+    document.querySelectorAll('[data-retry]').forEach(b => b.onclick = convert);
+    url.addEventListener('input', () => { clearBtn.hidden = !url.value; });
+
+    clearBtn.onclick = () => {
+      clearTimeout(loadTimer); url.value = '';
+      chips.forEach(c => c.setAttribute('aria-pressed', 'false')); custom.hidden = true; custom.value = '';
+      go('Default'); url.focus();
+    };
+
+    chips.forEach(c => c.onclick = () => {
+      const was = c.getAttribute('aria-pressed') === 'true';
+      chips.forEach(x => x.setAttribute('aria-pressed', 'false'));
+      if (!was) c.setAttribute('aria-pressed', 'true');
+      const isCustom = !was && c.dataset.prompt === '__custom__';
+      custom.hidden = !isCustom;
+      if (isCustom) custom.focus();
+      notice.hidden = true; renderPayload();
+    });
+    custom.addEventListener('input', renderPayload);
+
+    $('copy-btn').onclick = () => say('Markdown 본문을 클립보드에 복사했습니다');
+    $('dl-btn').onclick = () => say('REST에서-trpc로-옮기며-배운-것.md 파일로 저장했습니다');
+
+    document.querySelectorAll('[data-open]').forEach(b => b.onclick = () => {
+      const name = b.dataset.open;
+      if (isLong()) {
+        $('paste-title').textContent = '전체 텍스트를 복사했습니다';
+        $('paste-body').textContent = name + ' 새 대화창을 열었습니다. 입력란에 붙여넣어 주세요 (Ctrl+V / ⌘V).';
+        notice.hidden = false; toast.hidden = true;
+      } else {
+        notice.hidden = true; say(name + ' 새 대화창을 미리 채워서 열었습니다');
+      }
+    });
+
+    /* product dark-mode toggle drives the shell's theme control */
+    const themeBtn = $('theme-btn');
+    const syncTheme = () => {
+      const d = document.body.classList.contains('sh-theme-dark');
+      themeBtn.setAttribute('aria-pressed', String(d));
+      $('ic-moon').hidden = d; $('ic-sun').hidden = !d;
+    };
+    themeBtn.onclick = () => document.querySelector('#sh-theme [data-theme="' + (document.body.classList.contains('sh-theme-dark') ? 'light' : 'dark') + '"]').click();
+    new MutationObserver(syncTheme).observe(document.body, { attributes: true, attributeFilter: ['class'] });
+    syncTheme();
+    sync();
+  })();
+</script>
