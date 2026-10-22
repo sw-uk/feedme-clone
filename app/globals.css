@@ -128,3 +128,47 @@
     @apply font-sans;
   }
 }
+@layer components {
+  /* 변환된 Markdown 본문 렌더링 */
+  .markdown-body {
+    font-size: 0.9375rem;
+    line-height: 1.75;
+    word-break: keep-all;
+    overflow-wrap: anywhere;
+  }
+  .markdown-body > :first-child { margin-top: 0; }
+  .markdown-body > :last-child { margin-bottom: 0; }
+  .markdown-body :is(p, ul, ol, blockquote, pre, table) { margin-bottom: 1em; }
+  .markdown-body h1 { font-size: 1.5rem; margin: 1.6em 0 0.6em; }
+  .markdown-body h2 { font-size: 1.25rem; margin: 1.8em 0 0.6em; line-height: 1.35; }
+  .markdown-body :is(h3, h4) { font-size: 1.0625rem; margin: 1.5em 0 0.5em; }
+  .markdown-body :is(h1, h2, h3, h4) { font-weight: 600; letter-spacing: -0.01em; }
+  .markdown-body :is(ul, ol) { padding-left: 1.4em; }
+  .markdown-body ul { list-style: disc; }
+  .markdown-body ol { list-style: decimal; }
+  .markdown-body li { margin: 0.25em 0; }
+  .markdown-body a { text-decoration: underline; text-underline-offset: 3px; }
+  .markdown-body img { max-width: 100%; height: auto; border-radius: var(--radius); }
+  .markdown-body code {
+    font-family: var(--font-geist-mono), ui-monospace, monospace;
+    font-size: 0.875em;
+    background: var(--muted);
+    padding: 2px 6px;
+    border-radius: 6px;
+  }
+  .markdown-body pre {
+    background: var(--muted);
+    border-radius: var(--radius);
+    padding: 14px 16px;
+    overflow-x: auto;
+    line-height: 1.55;
+  }
+  .markdown-body pre code { background: none; padding: 0; font-size: 0.8125rem; }
+  .markdown-body blockquote {
+    border-left: 3px solid var(--border);
+    padding-left: 14px;
+    color: var(--muted-foreground);
+  }
+  .markdown-body table { display: block; overflow-x: auto; border-collapse: collapse; font-size: 0.875rem; }
+  .markdown-body :is(th, td) { border: 1px solid var(--border); padding: 6px 10px; text-align: left; }
+}
